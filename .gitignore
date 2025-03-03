@@ -1,0 +1,15 @@
+### IDEs ###
+.idea
+*.iws
+*.iml
+*.ipr
+.vscode
+
+### Mac OS ###
+.DS_Store
+
+### vendor ###
+vendor
+
+### binaries ###
+server
