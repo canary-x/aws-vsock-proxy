@@ -45,11 +45,21 @@ func (s *Server) Close() error {
 }
 
 func listen(cfg config, log *zap.Logger) (net.Listener, error) {
-	ln, err := vsock.Listen(cfg.ServerPort, nil)
+	listenTCP := func(port uint32) (net.Listener, error) {
+		return net.Listen("tcp", fmt.Sprintf(":%d", port))
+	}
+	contextID, err := vsock.ContextID()
+	if err != nil {
+		log.Sugar().Infof("OS does not support vsock (error on getting CID: %v): falling back to regular TCP socket", err)
+		return listenTCP(cfg.ServerPort)
+	}
+
+	ln, err := vsock.ListenContextID(contextID, cfg.ServerPort, nil)
 	if err != nil && strings.Contains(err.Error(), "vsock: not implemented") {
 		log.Warn("OS does not support vsock: falling back to regular TCP socket")
-		return net.Listen("tcp", fmt.Sprintf(":%d", cfg.ServerPort))
+		return listenTCP(cfg.ServerPort)
 	}
+	log.Sugar().Infof("Vsock connected on CID %d", contextID)
 	return ln, err
 }
 
@@ -62,6 +72,7 @@ func registerRoutes(ctx context.Context, rtr *mux.Router) error {
 		return errors.Wrap(err, "loading AWS config")
 	}
 	sm := secretsmanager.NewFromConfig(awsCfg)
+	log.Info("AWS config loaded")
 
 	rtr.HandleFunc("/", APIHandler(HealthHandler)).Methods(http.MethodGet)
 	rtr.HandleFunc("/secret", APIHandler(GetSecretHandler(sm))).Methods(http.MethodGet)

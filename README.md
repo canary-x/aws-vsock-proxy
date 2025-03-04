@@ -19,7 +19,7 @@ curl -v http://localhost:9100/secret?secretId=dev%2Fgasolina
 
 ## Set up
 
-Build the executable for Linux amd64: ```build/linux/amd64```.
+Build the executable for Linux amd64: ```make build/linux/amd64```.
 
 Then bake into an EC2 instance and set it up as a service:
 
@@ -102,4 +102,12 @@ sudo systemctl restart myapp.service
 
 # Stop service
 sudo systemctl stop myapp.service
+```
+
+### Testing on the server
+
+Once the daemon is running, run a socat proxy temporarily and try curling: 
+```shell
+socat TCP-LISTEN:9100,fork,reuseaddr VSOCK-CONNECT:3:9100
+curl -v http://localhost:9100/secret?secretId=dev%2Fgasolina
 ```
