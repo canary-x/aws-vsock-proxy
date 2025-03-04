@@ -33,7 +33,9 @@ func Run() error {
 	registerInterrupt(cancel, log)
 
 	rtr := mux.NewRouter()
-	registerRoutes(rtr)
+	if err := registerRoutes(ctx, rtr); err != nil {
+		return errors.Wrap(err, "registering routes")
+	}
 
 	srv := NewServer(rtr, cfg)
 

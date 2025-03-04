@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/schema"
 	"github.com/mdlayher/vsock"
@@ -51,8 +53,19 @@ func listen(cfg config, log *zap.Logger) (net.Listener, error) {
 	return ln, err
 }
 
-func registerRoutes(rtr *mux.Router) {
+func registerRoutes(ctx context.Context, rtr *mux.Router) error {
+	log := getLogger(ctx)
+	log.Info("Loading AWS config")
+
+	awsCfg, err := awsConfig.LoadDefaultConfig(ctx)
+	if err != nil {
+		return errors.Wrap(err, "loading AWS config")
+	}
+	sm := secretsmanager.NewFromConfig(awsCfg)
+
 	rtr.HandleFunc("/", APIHandler(HealthHandler)).Methods(http.MethodGet)
+	rtr.HandleFunc("/secret", APIHandler(GetSecretHandler(sm))).Methods(http.MethodGet)
+	return nil
 }
 
 type BadRequestError struct {
@@ -79,6 +92,18 @@ func BadRequest(reason string) error {
 	return &BadRequestError{Reason: reason}
 }
 
+type NotFoundError struct {
+	Reason string
+}
+
+func (b *NotFoundError) Error() string {
+	return b.Reason
+}
+
+func NotFound(reason string) error {
+	return &NotFoundError{Reason: reason}
+}
+
 type HandlerFunc[I, O any] func(context.Context, *I) (*O, error)
 
 func APIHandler[I, O any](handler HandlerFunc[I, O]) http.HandlerFunc {
@@ -90,6 +115,14 @@ func APIHandler[I, O any](handler HandlerFunc[I, O]) http.HandlerFunc {
 			log.Warn("Invalid request detected", zap.String("reason", badReqErr.Reason))
 			resp.WriteHeader(http.StatusBadRequest)
 			errResp := Response[string]{http.StatusBadRequest, badReqErr.Reason}
+			if err := json.NewEncoder(resp).Encode(errResp); err != nil {
+				log.Error("Error encoding response", zap.Error(err))
+			}
+		}
+		handleNotFound := func(notFoundErr *NotFoundError) {
+			log.Warn("Not found", zap.String("reason", notFoundErr.Reason))
+			resp.WriteHeader(http.StatusNotFound)
+			errResp := Response[string]{http.StatusNotFound, notFoundErr.Reason}
 			if err := json.NewEncoder(resp).Encode(errResp); err != nil {
 				log.Error("Error encoding response", zap.Error(err))
 			}
@@ -124,6 +157,11 @@ func APIHandler[I, O any](handler HandlerFunc[I, O]) http.HandlerFunc {
 			var badReq *BadRequestError
 			if errors.As(err, &badReq) {
 				handleBadRequest(badReq)
+				return
+			}
+			var notFound *NotFoundError
+			if errors.As(err, &notFound) {
+				handleNotFound(notFound)
 				return
 			}
 			handleError(err)

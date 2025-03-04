@@ -10,6 +10,10 @@ help:
 build: ## build server
 	@${GO} build -o server ./cmd/server
 
+.PHONY: build/linux/amd64
+build: ## build server
+	@${GO} GOOS=linux GOARCH=amd64 build -o server ./cmd/server
+
 .PHONY: deps
 deps: ## set up all dependencies to run these make commands
 	${GO} install github.com/golangci/golangci-lint/cmd/golangci-lint@v${GOLINT_VERSION}
