@@ -87,16 +87,9 @@ func (b *BadRequestError) Error() string {
 	return b.Reason
 }
 
-type Response[T any] struct {
+type StdResponse[T any] struct {
 	StatusCode int `json:"statusCode"`
 	Body       T   `json:"body"`
-}
-
-func OkResponse[T any](body T) Response[T] {
-	return Response[T]{
-		StatusCode: http.StatusOK,
-		Body:       body,
-	}
 }
 
 func BadRequest(reason string) error {
@@ -125,7 +118,7 @@ func APIHandler[I, O any](handler HandlerFunc[I, O]) http.HandlerFunc {
 		handleBadRequest := func(badReqErr *BadRequestError) {
 			log.Warn("Invalid request detected", zap.String("reason", badReqErr.Reason))
 			resp.WriteHeader(http.StatusBadRequest)
-			errResp := Response[string]{http.StatusBadRequest, badReqErr.Reason}
+			errResp := StdResponse[string]{http.StatusBadRequest, badReqErr.Reason}
 			if err := json.NewEncoder(resp).Encode(errResp); err != nil {
 				log.Error("Error encoding response", zap.Error(err))
 			}
@@ -133,7 +126,7 @@ func APIHandler[I, O any](handler HandlerFunc[I, O]) http.HandlerFunc {
 		handleNotFound := func(notFoundErr *NotFoundError) {
 			log.Warn("Not found", zap.String("reason", notFoundErr.Reason))
 			resp.WriteHeader(http.StatusNotFound)
-			errResp := Response[string]{http.StatusNotFound, notFoundErr.Reason}
+			errResp := StdResponse[string]{http.StatusNotFound, notFoundErr.Reason}
 			if err := json.NewEncoder(resp).Encode(errResp); err != nil {
 				log.Error("Error encoding response", zap.Error(err))
 			}
@@ -141,7 +134,7 @@ func APIHandler[I, O any](handler HandlerFunc[I, O]) http.HandlerFunc {
 		handleError := func(err error) {
 			log.Error("Error handling request", zap.Error(err))
 			resp.WriteHeader(http.StatusInternalServerError)
-			errResp := Response[string]{http.StatusInternalServerError, "Internal server error"}
+			errResp := StdResponse[string]{http.StatusInternalServerError, "Internal server error"}
 			if err := json.NewEncoder(resp).Encode(errResp); err != nil {
 				log.Error("Error encoding response", zap.Error(err))
 			}
@@ -180,7 +173,7 @@ func APIHandler[I, O any](handler HandlerFunc[I, O]) http.HandlerFunc {
 		}
 
 		resp.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(resp).Encode(OkResponse(output)); err != nil {
+		if err := json.NewEncoder(resp).Encode(output); err != nil {
 			log.Error("Error encoding bad request response", zap.Error(err))
 		}
 	}

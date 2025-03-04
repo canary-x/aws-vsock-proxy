@@ -21,7 +21,15 @@ curl -v http://localhost:9100/secret?secretId=dev%2Fgasolina
 
 Build the executable for Linux amd64: ```make build/linux/amd64```.
 
-Then bake into an EC2 instance and set it up as a service:
+Then bake into an EC2 instance with an IAM role with permissions for secretsmanager.
+Also, make sure the proper AWS region is set, example:
+```shell
+mkdir -p ~/.aws
+echo "[default]
+region = eu-west-2" > ~/.aws/config
+```
+
+Then, set up the proxy server as a service:
 
 1. Create a directory for the program `sudo mkdir -p /opt/aws-vsock-proxy` and copy the executable into it
 2. Create a systemd service file `sudo vi /etc/systemd/system/myapp.service`
