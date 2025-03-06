@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/schema"
 	"github.com/mdlayher/vsock"
@@ -43,16 +45,38 @@ func (s *Server) Close() error {
 }
 
 func listen(cfg config, log *zap.Logger) (net.Listener, error) {
-	ln, err := vsock.Listen(cfg.ServerPort, nil)
+	listenTCP := func(port uint32) (net.Listener, error) {
+		return net.Listen("tcp", fmt.Sprintf(":%d", port))
+	}
+	contextID, err := vsock.ContextID()
+	if err != nil {
+		log.Sugar().Infof("OS does not support vsock (error on getting CID: %v): falling back to regular TCP socket", err)
+		return listenTCP(cfg.ServerPort)
+	}
+
+	ln, err := vsock.ListenContextID(contextID, cfg.ServerPort, nil)
 	if err != nil && strings.Contains(err.Error(), "vsock: not implemented") {
 		log.Warn("OS does not support vsock: falling back to regular TCP socket")
-		return net.Listen("tcp", fmt.Sprintf(":%d", cfg.ServerPort))
+		return listenTCP(cfg.ServerPort)
 	}
+	log.Sugar().Infof("Vsock connected on CID %d", contextID)
 	return ln, err
 }
 
-func registerRoutes(rtr *mux.Router) {
+func registerRoutes(ctx context.Context, rtr *mux.Router) error {
+	log := getLogger(ctx)
+	log.Info("Loading AWS config")
+
+	awsCfg, err := awsConfig.LoadDefaultConfig(ctx)
+	if err != nil {
+		return errors.Wrap(err, "loading AWS config")
+	}
+	sm := secretsmanager.NewFromConfig(awsCfg)
+	log.Info("AWS config loaded")
+
 	rtr.HandleFunc("/", APIHandler(HealthHandler)).Methods(http.MethodGet)
+	rtr.HandleFunc("/secret", APIHandler(GetSecretHandler(sm))).Methods(http.MethodGet)
+	return nil
 }
 
 type BadRequestError struct {
@@ -63,20 +87,25 @@ func (b *BadRequestError) Error() string {
 	return b.Reason
 }
 
-type Response[T any] struct {
+type StdResponse[T any] struct {
 	StatusCode int `json:"statusCode"`
 	Body       T   `json:"body"`
 }
 
-func OkResponse[T any](body T) Response[T] {
-	return Response[T]{
-		StatusCode: http.StatusOK,
-		Body:       body,
-	}
-}
-
 func BadRequest(reason string) error {
 	return &BadRequestError{Reason: reason}
+}
+
+type NotFoundError struct {
+	Reason string
+}
+
+func (b *NotFoundError) Error() string {
+	return b.Reason
+}
+
+func NotFound(reason string) error {
+	return &NotFoundError{Reason: reason}
 }
 
 type HandlerFunc[I, O any] func(context.Context, *I) (*O, error)
@@ -89,7 +118,15 @@ func APIHandler[I, O any](handler HandlerFunc[I, O]) http.HandlerFunc {
 		handleBadRequest := func(badReqErr *BadRequestError) {
 			log.Warn("Invalid request detected", zap.String("reason", badReqErr.Reason))
 			resp.WriteHeader(http.StatusBadRequest)
-			errResp := Response[string]{http.StatusBadRequest, badReqErr.Reason}
+			errResp := StdResponse[string]{http.StatusBadRequest, badReqErr.Reason}
+			if err := json.NewEncoder(resp).Encode(errResp); err != nil {
+				log.Error("Error encoding response", zap.Error(err))
+			}
+		}
+		handleNotFound := func(notFoundErr *NotFoundError) {
+			log.Warn("Not found", zap.String("reason", notFoundErr.Reason))
+			resp.WriteHeader(http.StatusNotFound)
+			errResp := StdResponse[string]{http.StatusNotFound, notFoundErr.Reason}
 			if err := json.NewEncoder(resp).Encode(errResp); err != nil {
 				log.Error("Error encoding response", zap.Error(err))
 			}
@@ -97,7 +134,7 @@ func APIHandler[I, O any](handler HandlerFunc[I, O]) http.HandlerFunc {
 		handleError := func(err error) {
 			log.Error("Error handling request", zap.Error(err))
 			resp.WriteHeader(http.StatusInternalServerError)
-			errResp := Response[string]{http.StatusInternalServerError, "Internal server error"}
+			errResp := StdResponse[string]{http.StatusInternalServerError, "Internal server error"}
 			if err := json.NewEncoder(resp).Encode(errResp); err != nil {
 				log.Error("Error encoding response", zap.Error(err))
 			}
@@ -126,12 +163,17 @@ func APIHandler[I, O any](handler HandlerFunc[I, O]) http.HandlerFunc {
 				handleBadRequest(badReq)
 				return
 			}
+			var notFound *NotFoundError
+			if errors.As(err, &notFound) {
+				handleNotFound(notFound)
+				return
+			}
 			handleError(err)
 			return
 		}
 
 		resp.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(resp).Encode(OkResponse(output)); err != nil {
+		if err := json.NewEncoder(resp).Encode(output); err != nil {
 			log.Error("Error encoding bad request response", zap.Error(err))
 		}
 	}

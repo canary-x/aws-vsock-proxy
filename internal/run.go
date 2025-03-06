@@ -22,7 +22,6 @@ func Run() error {
 	if err != nil {
 		return errors.Wrap(err, "instantiating logger")
 	}
-	log.Sugar().Infof("Starting server listening on port %d", cfg.ServerPort)
 
 	ln, err := listen(cfg, log)
 	if err != nil {
@@ -33,7 +32,10 @@ func Run() error {
 	registerInterrupt(cancel, log)
 
 	rtr := mux.NewRouter()
-	registerRoutes(rtr)
+	if err := registerRoutes(ctx, rtr); err != nil {
+		return errors.Wrap(err, "registering routes")
+	}
+	log.Sugar().Infof("Starting server listening on port %d", cfg.ServerPort)
 
 	srv := NewServer(rtr, cfg)
 

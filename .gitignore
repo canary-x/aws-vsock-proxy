@@ -12,4 +12,4 @@
 vendor
 
 ### binaries ###
-server
+aws-vsock-proxy

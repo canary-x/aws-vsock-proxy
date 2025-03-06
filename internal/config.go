@@ -7,7 +7,7 @@ import (
 )
 
 type config struct {
-	ServerPort   uint32        `envconfig:"SERVER_PORT" default:"8080"`
+	ServerPort   uint32        `envconfig:"SERVER_PORT" default:"9100"`
 	ReadTimeout  time.Duration `envconfig:"READ_TIMEOUT" default:"3s"`
 	WriteTimeout time.Duration `envconfig:"WRITE_TIMEOUT" default:"10s"`
 }

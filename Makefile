@@ -8,7 +8,11 @@ help:
 
 .PHONY: build
 build: ## build server
-	@${GO} build -o server ./cmd/server
+	@${GO} build -o aws-vsock-proxy ./cmd/server
+
+.PHONY: build/linux/amd64
+build/linux/amd64: ## build server for linux amd64
+	@GOOS=linux GOARCH=amd64 ${GO} build -o aws-vsock-proxy ./cmd/server
 
 .PHONY: deps
 deps: ## set up all dependencies to run these make commands
