@@ -1,6 +1,7 @@
 # AWS vsock Proxy
 
-Implements API via vsock, exposing basic AWS operations, like getting secrets from secretmanager.
+Implements API via vsock, exposing basic AWS operations, like getting secrets from secretsmanager and uploading files to
+S3.
 It is meant to run on an EC2 instance with Nitro installed, to allow Nitro enclaves to access AWS services with ease.
 
 ## Testing locally
