@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/schema"
@@ -72,10 +73,12 @@ func registerRoutes(ctx context.Context, rtr *mux.Router) error {
 		return errors.Wrap(err, "loading AWS config")
 	}
 	sm := secretsmanager.NewFromConfig(awsCfg)
+	s3Client := s3.NewFromConfig(awsCfg)
 	log.Info("AWS config loaded")
 
 	rtr.HandleFunc("/", APIHandler(HealthHandler)).Methods(http.MethodGet)
 	rtr.HandleFunc("/secret", APIHandler(GetSecretHandler(sm))).Methods(http.MethodGet)
+	rtr.HandleFunc("/s3", APIHandler(S3PutHandler(s3Client))).Methods(http.MethodPut)
 	return nil
 }
 

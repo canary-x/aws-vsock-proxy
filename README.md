@@ -1,6 +1,7 @@
 # AWS vsock Proxy
 
-Implements API via vsock, exposing basic AWS operations, like getting secrets from secretmanager.
+Implements API via vsock, exposing basic AWS operations, like getting secrets from secretsmanager and uploading files to
+S3.
 It is meant to run on an EC2 instance with Nitro installed, to allow Nitro enclaves to access AWS services with ease.
 
 ## Testing locally
@@ -17,6 +18,21 @@ Then test the secret retrieval:
 ```shell
 curl -v http://localhost:9100/secret?secretId=dev%2Fgasolina
 ```
+
+Or test the S3 upload:
+
+```shell
+curl -v -X PUT http://localhost:9100/s3 \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "bucket": "layer0-dvn-dev",
+    "key": "test.txt",
+    "contentType": "text/plain",
+    "data": "aGVsbG8gd29ybGQ="
+  }'
+```
+
+This should create a plain text file with `hello world`.
 
 ## Set up
 
