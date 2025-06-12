@@ -18,6 +18,21 @@ Then test the secret retrieval:
 curl -v http://localhost:9100/secret?secretId=dev%2Fgasolina
 ```
 
+Or test the S3 upload:
+
+```shell
+curl -v -X PUT http://localhost:9100/s3 \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "bucket": "layer0-dvn-dev",
+    "key": "test.txt",
+    "contentType": "text/plain",
+    "data": "aGVsbG8gd29ybGQ="
+  }'
+```
+
+This should create a plain text file with `hello world`.
+
 ## Set up
 
 Build the executable for Linux amd64: ```make build/linux/amd64```.
